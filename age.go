@@ -102,6 +102,11 @@ func Encrypt(dst io.Writer, recipients ...Recipient) (io.WriteCloser, error) {
 	if len(recipients) == 0 {
 		return nil, errors.New("no recipients specified")
 	}
+	for _, r := range recipients {
+		if _, ok := r.(*ScryptRecipient); ok && len(recipients) != 1 {
+			return nil, errors.New("an ScryptRecipient must be the only one for the file")
+		}
+	}
 
 	fileKey := make([]byte, fileKeySize)
 	if _, err := rand.Read(fileKey); err != nil {
@@ -116,11 +121,6 @@ func Encrypt(dst io.Writer, recipients ...Recipient) (io.WriteCloser, error) {
 		}
 		for _, s := range stanzas {
 			hdr.Recipients = append(hdr.Recipients, (*format.Stanza)(s))
-		}
-	}
-	for _, s := range hdr.Recipients {
-		if s.Type == "scrypt" && len(hdr.Recipients) != 1 {
-			return nil, errors.New("an scrypt recipient must be the only one")
 		}
 	}
 	if mac, err := headerMAC(fileKey, hdr); err != nil {
@@ -167,12 +167,6 @@ func Decrypt(src io.Reader, identities ...Identity) (io.Reader, error) {
 	hdr, payload, err := format.Parse(src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read header: %v", err)
-	}
-
-	for _, r := range hdr.Recipients {
-		if r.Type == "scrypt" && len(hdr.Recipients) != 1 {
-			return nil, errors.New("an scrypt recipient must be the only one")
-		}
 	}
 
 	stanzas := make([]*Stanza, 0, len(hdr.Recipients))
